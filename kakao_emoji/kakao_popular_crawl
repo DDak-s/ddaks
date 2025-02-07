@@ -1,0 +1,121 @@
+# !pip install torch torchvision numpy matplotlib opencv-python scikit-learn
+'''
+1. 카카오톡 이모티콘 판매 상품 목록 크롤링
+인기 이모티콘 (총 999개) 순위 https://e.kakao.com/item/hot
+
+i : 0~49
+for i in range(50):
+request url = f'https://e.kakao.com/api/v1/items/hot?page={i}&size=20'
+
+isBigEmo:false
+isEmoji:false
+isLike:false
+isNew: false
+isOnSale: true
+isPackage: false
+isSound: false
+isToday: false
+title: "말하는 감자 포테토뭉 3"
+titleDetailUrl: "https://item.kakaocdn.net/do/50dc63f158068c2f16d7b9a0f0c49801f43ad912ad8dd55b04db6a64cddaf76d"   :  gif
+titleImageUrl: "https://item.kakaocdn.net/do/50dc63f158068c2f16d7b9a0f0c49801617ea012db208c18f6e83b1a90a7baa7"    :  작은 이미지
+titleUrl: "tomong-the-talking-potato-3"                                                                           :  https://e.kakao.com/t/{titleUrl}:상품페이지
+'''
+
+
+## 1. 카카오톡 이모티콘 판매 상품 목록 크롤링
+
+import requests
+import json
+import pandas as pd
+
+headers = {'user-agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
+}
+
+result = []
+for i in range(0, 50):
+    print('현재페이지: ', i)
+
+    url = f'https://e.kakao.com/api/v1/items/hot?page={i}&size=20'
+    response = requests.get(url, headers=headers)
+    # print(response)
+    # print(response.text)
+    # break
+
+
+    # JSON 데이터 파싱
+    emoji_list = response.json()['result']['content']
+    
+    for emoji in emoji_list:
+        # 데이터를 추출하여 result에 저장
+        result.append(dict(
+            page=i,
+            title=emoji.get('title', ''),
+            artist=emoji.get('artist', ''),
+            titleImageUrl=emoji.get('titleImageUrl', ''),
+            titleDetailUrl=emoji.get('titleDetailUrl', ''),
+            titleUrl=emoji.get('titleUrl', ''),
+            isLike=emoji.get('isLike', ''),  
+            isNew=emoji.get('isNew', ''),   
+            isOnSale=emoji.get('isOnSale', ''), 
+            isPackage=emoji.get('isPackage', ''), 
+            isBigEmo=emoji.get('isBigEmo', ''),  
+            isSound=emoji.get('isSound', ''),  
+            isEmoji=emoji.get('isEmoji', ''),  
+            isToday=emoji.get('isToday', '')   
+        ))
+# json파일로 저장
+with open(f'kakao{i}.json', 'w', encoding='utf-8') as json_file: # write
+    json.dump(result, json_file, ensure_ascii=False)
+
+# 데이터프레임으로 변환
+df = pd.DataFrame(result)
+
+csv_file = 'kakao_emoji_list.csv'
+# CSV 파일로 저장
+df.to_csv(csv_file, index=False, encoding='utf-8-sig')
+
+print(f"CSV 파일이 '{csv_file}'로 저장되었습니다.")
+# 결과 출력
+print(result)
+
+
+
+## 인기 대표이미지 저장
+
+import os
+import requests
+
+# CSV 파일 경로
+csv_file_path_name = 'kakao_emoji_list'
+
+# CSV 파일을 pandas DataFrame으로 불러오기
+df_kakao_img = pd.read_csv(f'{csv_file_path_name}.csv')
+
+# 저장할 폴더 경로
+folder_path = f"images_{csv_file_path_name}"
+os.makedirs(folder_path, exist_ok=True)  # 폴더가 없으면 생성
+
+# 요청 헤더 설정
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+}
+
+# 이미지 다운로드 및 저장
+for index, row in df_kakao_img.iterrows():
+    image_url = row['titleImageUrl']  # 'titleImageUrl' 컬럼에서 URL을 가져옴
+    image_name = f"{row['titleUrl']}.jpg"  # titleUrl를 이미지 파일 이름으로 설정
+    image_path = os.path.join(folder_path, image_name)
+    # print(image_url)
+    # print(image_name)
+    # 이미지 다운로드
+    try:
+        response = requests.get(image_url, headers=headers)
+        if response.status_code == 200:
+            with open(image_path, 'wb') as file:
+                file.write(response.content)
+            print(f"이미지 저장 완료: {image_name}")
+        else:
+            print(f"이미지 다운로드 실패: {image_name},{response.status_code}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"요청 실패: {image_name} - {e}")
