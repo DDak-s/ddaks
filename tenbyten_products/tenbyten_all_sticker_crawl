@@ -1,0 +1,124 @@
+import requests
+import json
+import base64
+import time
+
+# 텐바이텐 API URL
+BASE_URL = "https://fapi.10x10.co.kr/api/web/v1/category/items/search"
+
+# HTTP 요청 헤더 (봇 탐지 방지)
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Referer": "https://www.10x10.co.kr/"
+}
+
+# Base64 디코딩 함수
+def decode_base64_url(encoded_url):
+    try:
+        # Base64 패딩 자동 추가
+        missing_padding = len(encoded_url) % 4
+        if missing_padding:
+            encoded_url += '=' * (4 - missing_padding)
+
+        # URL-safe Base64 디코딩
+        decoded_bytes = base64.urlsafe_b64decode(encoded_url)
+        return decoded_bytes.decode("utf-8")  # 문자열 변환
+
+    except Exception as e:
+        print(f"🚨 이미지 URL 디코딩 오류: {e}")
+        return encoded_url  # 디코딩 실패 시 원본 값 반환
+
+# 상품 리스트 가져오기 (API 요청)
+def get_product_list(page=1):
+    params = {
+        "catecode": "101107102",  # 스티커 카테고리 코드
+        "page": page,
+        "sortMethod": "best"  # 인기순 정렬
+    }
+    
+    response = requests.get(BASE_URL, headers=HEADERS, params=params)
+    
+    if response.status_code == 200:
+        data = response.json()
+        return data  # 전체 JSON 응답 반환
+    else:
+        print(f"🚨 API 요청 실패 (페이지 {page}) - 상태 코드: {response.status_code}")
+        return None
+
+# 전체 페이지 크롤링 (모든 상품 가져오기)
+def scrape_all_pages():
+    all_products = []
+    
+    # 첫 페이지 데이터 가져오기 (전체 페이지 수 확인)
+    first_page_data = get_product_list(page=1)
+    if not first_page_data:
+        print("❌ 첫 페이지 데이터 로드 실패")
+        return []
+
+    last_page = first_page_data["last_page"]  # 전체 페이지 수 가져오기
+    print(f"📌 총 {last_page} 페이지 크롤링 시작...")
+
+    for page in range(1, last_page + 1):
+        print(f"📌 {page} 페이지 크롤링 중...")
+        page_data = get_product_list(page)
+        
+        if not page_data or "items" not in page_data:
+            print("⚠️ 더 이상 가져올 데이터가 없음.")
+            break
+
+        products = page_data["items"]
+        
+        for product in products:
+            product_info = {
+                "name": product["item_name"],  # 상품명
+                "price": product["item_price"],  # 가격
+                "product_id": str(product["item_id"]),  # 상품 ID (문자열로 변환)
+                "category": product["category_name"],  # 카테고리명
+                "image_url": decode_base64_url(product["list_image"]),  # 목록 이미지 URL
+                "high_res_image_url": decode_base64_url(product["big_image"]),  # 고해상도 이미지 URL
+                "product_url": f"https://www.10x10.co.kr/shopping/category_list.asp?product_id={product['item_id']}",  # 상세 페이지 URL
+                "brand": product.get("brand_name", "Unknown"),  # 브랜드명
+                "review_rating": product.get("review_rating", 0),  # 리뷰 평점
+                "review_count": product.get("review_cnt", 0),  # 리뷰 개수
+                "wishlist_count": product.get("favcount", 0),  # 찜(좋아요) 개수
+                "discount_percent": product.get("sale_percent", 0),  # 할인율
+                "is_ten_only": product.get("ten_only", False),  # 텐바이텐 단독 상품 여부
+                "is_special_offer": product.get("specialOffer", False)  # 특별할인 여부
+            }
+            all_products.append(product_info)
+
+        time.sleep(1)  # 서버 부하 방지를 위해 대기
+
+    return all_products
+
+# 실행
+if __name__ == "__main__":
+    print("📌 텐바이텐 스티커 상품 전체 크롤링 시작...")
+    products = scrape_all_pages()  # 모든 페이지 크롤링
+
+    # JSON 파일 저장
+    with open("tenbyten_all_products.json", "w", encoding="utf-8") as f:
+        json.dump(products, f, ensure_ascii=False, indent=4)
+
+    print(f"✅ 크롤링 완료! 총 {len(products)}개 상품 저장됨.")
+    print("📂 데이터 저장 완료: tenbyten_all_products.json")
+
+
+## JSON 데이터를 CSV 파일로 변환 ##
+import json
+import pandas as pd
+
+# JSON 파일 로드
+json_file = "tenbyten_all_products.json"
+csv_file = "tenbyten_all_products.csv"
+
+with open(json_file, "r", encoding="utf-8") as f:
+    products = json.load(f)
+
+# DataFrame 변환
+df = pd.DataFrame(products)
+
+# CSV 저장
+df.to_csv(csv_file, index=False, encoding="utf-8-sig")
+
+print(f"✅ JSON 데이터를 CSV 파일로 변환 완료! 📂 {csv_file}")

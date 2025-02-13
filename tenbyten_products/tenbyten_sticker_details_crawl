@@ -1,0 +1,34 @@
+import pandas as pd
+import time
+
+# 기존 CSV 파일 경로 (product_id 리스트가 저장된 파일)
+input_csv_path = "tenbyten_all_products.csv"
+
+# 새로운 CSV 파일 경로 (상세 정보 저장)
+output_csv_path = "tenbyten_product_details.csv"
+
+# CSV 파일에서 product_id 리스트 불러오기
+df = pd.read_csv(input_csv_path, dtype={"product_id": str})  # product_id 문자열로 읽기
+product_id_list = df["product_id"].tolist()
+
+print(f"📌 총 {len(product_id_list)}개의 상품 상세 정보를 크롤링합니다...")
+
+# 크롤링한 데이터를 저장할 리스트
+detailed_products = []
+
+# 모든 product_id 대해 상세 크롤링 실행
+for idx, product_id in enumerate(product_id_list):
+    print(f"🔍 {idx+1}/{len(product_id_list)}: {product_id} 상세 정보 크롤링 중...")
+    
+    product_data = scrape_view_product_data(product_id)
+    
+    if product_data:
+        detailed_products.append(product_data)
+
+    time.sleep(1)  # 서버 부하 방지
+
+# 크롤링한 데이터를 DataFrame으로 변환 후 CSV 저장
+df_detailed = pd.DataFrame(detailed_products)
+df_detailed.to_csv(output_csv_path, index=False, encoding="utf-8-sig")
+
+print(f"✅ 크롤링 완료! 📂 {output_csv_path} 파일로 저장됨.")
